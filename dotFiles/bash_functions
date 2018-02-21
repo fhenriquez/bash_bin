@@ -1,0 +1,707 @@
+# bash functions
+
+# Importing colors
+source ~/.bash_color_codes
+
+#########################################################################################
+#                                                                                       #
+# System Info gathering                                                                 #
+#                                                                                       #
+#########################################################################################
+
+# What is my OS. 
+
+if [ -f /etc/os-release ]; then
+    # freedesktop.org and systemd
+    . /etc/os-release
+    OS=$NAME
+    VER=$VERSION_ID
+elif type lsb_release >/dev/null 2>&1; then
+    # linuxbase.org
+    OS=$(lsb_release -si)
+    VER=$(lsb_release -sr)
+elif [ -f /etc/lsb-release ]; then
+    # For some versions of Debian/Ubuntu without lsb_release command
+    . /etc/lsb-release
+    OS=$DISTRIB_ID
+    VER=$DISTRIB_RELEASE
+elif [ -f /etc/debian_version ]; then
+    # Older Debian/Ubuntu/etc.
+    OS=Debian
+    VER=$(cat /etc/debian_version)
+elif [ -f /etc/SuSe-release ]; then
+    # Older SuSE/etc.
+    ...
+elif [ -f /etc/redhat-release ]; then
+    # Older Red Hat, CentOS, etc.
+    ...
+elif sw_vers >/dev/null 2>&1; then
+    OS="Mac OS X"
+    VER=$(sw_vers | grep ProductVer | cut -d : -f 2)
+else
+    # Fall back to uname, e.g. "Linux <version>", also works for BSD, etc.
+    OS=$(uname -s)
+    VER=$(uname -r)
+fi
+
+# Does not work on mobaXTerm commented out
+
+# Get IP address on ethernet. 
+my_ip()
+{
+    if [ "$OS" == "Mac OS X" ]; then
+        MY_IP=$(/sbin/ifconfig en0 | grep -w "inet" | cut -d ' ' -f 2)
+    else
+        MY_IP=$(/sbin/ifconfig eth0 | awk '/inet/ { print $2 } ' | sed -e s/addr://)
+    fi        
+    echo ${MY_IP:-"Not connected"}
+}
+
+# Get cureent host relate info. Work on the MAC OS version.
+ii()
+{
+    echo -e "\nYou are logged on ${BRed}$HOST"
+    echo -e "\n${BRed}Additionnal information:$Color_Off " ; uname -a
+    echo -e "\n${BRed}Users logged on:$Color_Off " ; w -hs | cut -d " " -f1 | sort | uniq
+    echo -e "\n${BRed}Current date :$Color_Off " ; date
+    echo -e "\n${BRed}Machine stats :$Color_Off " ; uptime
+    echo -e "\n${BRed}Memory stats :$Color_Off " ; 
+        if [ "$OS" == "Mac OS X" ]
+        then 
+            top -l 1 -s 0 | grep PhysMem 
+        else 
+            free -m
+        fi
+    echo -e "\n${BRed}Diskspace :$Color_Off " ; df / $HOME
+    echo -e "\n${BRed}Local IP Address :$Color_Off" ; my_ip
+    echo -e "\n${BRed}Open connections :$Color_Off "; netstat -int;
+    echo
+}
+
+#########################################################################################
+#                                                                                       #
+# Productiviy Functions                                                                 #
+#                                                                                       #
+#########################################################################################
+
+
+ex () {
+    if [ -f $1 ] ; then
+        case $1 in
+            *.tar.bz2)   tar xjf $1        ;;
+            *.tar.gz)    tar xzf $1     ;;
+            *.bz2)       bunzip2 $1       ;;
+            *.rar)       rar x $1     ;;
+            *.gz)        gunzip $1     ;;
+            *.tar)       tar xf $1        ;;
+            *.tbz2)      tar xjf $1      ;;
+            *.tgz)       tar xzf $1       ;;
+            *.zip)       unzip $1     ;;
+            *.Z)         uncompress $1  ;;
+            *.7z)        7z x $1    ;;
+	    *)           echo "'$1' cannot be extracted via extract()" ;;
+        esac
+    else
+        echo "'$1' is not a valid file"
+    fi
+}
+
+# Creates an archive (*.tar.gz) from given directory.
+maketar()
+{ 
+    tar cvzf "${1%%/}.tar.gz"  "${1%%/}/"; 
+}
+
+# Create a ZIP archive of a file or folder.
+makezip()
+{ 
+    zip -r "${1%%/}.zip" "$1" ; 
+}
+
+
+# Create a TAR archive of a file or folder.
+mktar()
+{ 
+    tar czf "${1%%/}.tar.gz" "${1%%/}/"; 
+}
+
+# Easier Basic Calculator
+calc()
+{ 
+    echo "$*" | bc; 
+}
+
+
+# mkmv - creates a new directory and moves into it,
+# Usage: mkmv <directory>
+mcd()
+{
+    mkdir -p -- "$1" &&
+    cd -P -- "$1"
+}
+
+#cd and ls a directory at the same time
+cdl()
+{
+    cd -- "$@" && ls
+}
+
+# Own file 
+mkmine()
+{ 
+    sudo chown -R ${USER} ${1:-.}; 
+}
+
+# sanitize - set file/directory owner and permissions to normal values (644/755)
+# Usage: sanitize <file>
+sanitize()
+{
+    chmod -R u=rwX,go=rX "$@"
+    chown -R ${USER}.users "$@"
+}
+
+# Time Functions
+
+countdown()
+(
+    if [ "$#" -eq 0 ]
+    then
+        echo -e "
+        \rUsage countdown hours:min:secs
+        \rDescription: Simple countdown function.
+        "
+        return 1    
+    else
+
+    IFS=:
+    set -- $*
+    secs=$(( ${1#0} * 3600 + ${2#0} * 60 + ${3#0} ))
+    while [ $secs -gt 0 ]
+    do
+      sleep 1 &
+      printf "${Red}\r%02d:%02d:%02d" $((secs/3600)) $(( (secs/60)%60)) $((secs%60))
+      secs=$(( $secs - 1 ))
+      wait
+    done
+    echo -e ${Color_Off}
+    fi
+)
+
+stopwatch()
+{
+    local BEGIN=$(date +%s)
+    echo -e "${Cyan}Starting Stopwatch..."
+
+    while true; do
+        local NOW=$(date +%s)
+        local DIFF=$(($NOW - $BEGIN))
+        local MINS=$(($DIFF / 60))
+        local SECS=$(($DIFF % 60))
+        local HOURS=$(($DIFF / 3600))
+        local DAYS=$(($DIFF / 86400))
+
+        printf "${Red}\r%3d Days, %02d:%02d:%02d${NC}" $DAYS $HOURS $MINS $SECS
+        sleep 0.5
+    done
+    echo 
+}
+
+# clock - A bash clock that can run in your terminal window.
+clock ()
+{
+while true;do clear;echo "===========";date +"%r";echo "===========";sleep 1;done
+}
+
+# Weather functions
+
+wttr()
+{
+ curl wttr.in/"$1";
+}
+
+sweather()
+{
+    curl -s "http://api.wunderground.com/auto/wui/geo/ForecastXML/index.xml?query=${@:-<01830>}"|perl -ne '/<title>([^<]+)/&&printf "%s: ",$1;/<fcttext>([^<]+)/&&print $1,"\n"';
+
+}
+
+# Rough function to display the number of unread emails in your gmail:
+gmail()
+{
+    if [ "$#" -eq 0 ]
+    then
+        echo -e "
+        \rUsage gmail [user name]
+        \rDescription: Display the number of unread emails in your gmail.
+        "
+        return 1    
+    else
+        curl -u "$1" --silent "https://mail.google.com/mail/feed/atom" | sed -e 's/<\/fullcount.*/\n/' | sed -e 's/.*fullcount>//'
+    fi
+}
+
+
+# Dictionary
+# Usage: dict <word>
+#dict()
+#{
+#    curl dict://dict.org/d:"${1}"
+#}
+
+# Get News sources.
+getnews()
+{
+
+    # Function Variables.
+    op_id=0
+
+    # USAGE
+    usage(){
+        echo -e "
+        \rUsage: getnews [options]
+        \rDescription:\tThe script will gather the news.
+
+        \roptional arguments:
+        \r-a\tList all sources.
+        \r-d\t<news-id> Get descriptor.
+        \r-l\tList all English speaking news sources.
+        \r-h\tShow this help message and exit.
+        \r-i\tList all English speaking news sources id.
+        \r-s\t<news-id>List all articles of the news source.
+        \r-t\t<news-id> List the top headlines of the news source.
+        \r-u\tPrint URL of news articles from source.
+        "
+    }
+
+    # Get News.
+    news_get()
+    {
+        # USAGE
+        usage(){
+            echo -e "
+            \rUsage: $0 <news-id>
+            \rDescription:\tThe script will gather the news from specific source.
+
+            \r-h:\tShow this help message.
+            \r-s:\tList all articles from news source.
+            \r-t:\tList top headlines from news source.
+            \r-u:\tList news source with urls.
+            "
+        }
+
+        args=`getopt s:t:uh $*`
+
+        news_apiKey=HERE_GOES_API_KEY
+        news_api_url="https://newsapi.org/v2/"
+        news_url=0
+
+        if [ $? != 0 ]
+        then
+            usage
+            exit 2
+        fi
+
+        set -- $args
+
+            for i
+            do
+                 case "$i" in
+                    -s) # List id of English news sources.
+                        url_get="all"
+                        url_c="everything"
+                        ;;
+                    -u) # List headline URLs.
+                        news_url=1
+                        ;;
+                    -h) # Display usage.
+                        usage
+                        exit 1
+                        #return 2;
+                        ;;
+                    -t)
+                        url_get="top"
+                        url_c="top-headlines"
+                        ;;
+                     --)
+                        shift; break;;
+                esac
+            done
+
+       if [ -z $1 ]
+       then
+            usage;
+        elif [ $news_url -eq 1 ]
+        then
+            curl ${news_api_url}\\${url_c} -s -G \
+            -d sources=$1 \
+            -d apiKey=$news_apiKey\
+            | jq -r '.articles[] | .title, .url'
+        else
+            curl ${news_api_url}\\${url_c} -s -G \
+            -d sources=$1 \
+            -d apiKey=$news_apiKey \
+            | jq -r '.articles[] | .title'
+        fi
+    }
+
+    # Get news source descriptors.
+    news_desc()
+    {
+        id_news="$1"
+        news_desc=`echo $news_sources | jq .[] | grep -A 6 -F "$id_news" | head -n 7`
+        if [ -z "$news_desc" ]
+        then
+            echo -e "\nNews ID: ${Red}${news_id}${Color_Off} does not exist."
+        else
+
+        ID=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' | sed -n '1p' \
+            | cut -d ':' -f 2 | sed 's/,$//'`
+        Name=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' | sed -n '2p' \
+            | cut -d ':' -f 2 | sed 's/,$//'`
+        Description=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' \
+            | sed -n '3p' | cut -d ':' -f 2 | sed 's/,$//'`
+        URL=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' | sed -n '4p' \
+            | cut -d ',' -f 1 | awk '{print $2}'`
+        Category=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' | sed -n '5p' \
+            | cut -d ':' -f 2 | sed 's/,$//'`
+        Language=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' | sed -n '6p' \
+            | cut -d ':' -f 2 | sed 's/,$//'`
+        Country=`echo "$news_desc" | sed -e $'s/", "/\\\n/g' | sed 's/"//g' | sed -n '7p' \
+            | cut -d ':' -f 2 | sed 's/,$//'`
+
+
+
+        echo -e "
+        \r${ICyan}ID:${Color_Off}${ID}
+        \r${ICyan}Name:${Color_Off}${Name}
+        \r${ICyan}Description:${Color_Off}${Description}
+        \r${ICyan}URL: ${Color_Off}${URL}
+        \r${ICyan}Category:${Color_Off}${Category}
+        \r${ICyan}Language:${Color_Off}${Language}
+        \r${ICyan}Country:${Color_Off}${Country}
+        "
+        fi
+    }
+
+    args=`getopt :d:t:s:aliuh $*`
+    # you should not use `getopt abo: "$@"` since that would parse
+    # the arguments differently from what the set command below does.
+
+    if [ $? != 0 ]
+    then
+        usage
+        return 2
+    fi
+
+    set -- $args
+    # You cannot use the set command with a backquoted getopt directly,
+    # since the exit code from getopt would be shadowed by those of set,
+    # which is zero by definition.
+
+    news_apiKey=HERE_GOES_THE_API_KEY
+    news_sources=`curl https://newsapi.org/v2/sources -s -G -d apiKey=$news_apiKey`
+    get_urls=0
+    news_id=0
+
+    for i
+    do
+         case "$i" in
+            -a) # Displays all news sources id.
+                op_id=1
+                shift
+                ;;
+             -u) # List headline URLs.
+                get_urls=1;
+                shift
+                ;;
+            -d) # Gives description of specificied news source.
+                op_id=2
+                news_id="$2"
+                shift
+                ;;
+            -l) # List names and id of English news sources.
+                op_id=3
+                shift
+                ;;
+            -i) # List id of English news sources.
+                op_id=4
+                shift
+                ;;
+            -s)
+                news_id="$2"
+                news_name=$(news_desc "$news_id" | grep Name | cut -d ':' -f 2 )
+
+                if [ -z "$news_name" ]
+                then
+                    echo -e "\nNews ID: ${IRed}${news_id}${Color_Off} does not exist."
+                    return 2
+                fi
+
+                op_id=5
+                shift
+                ;;
+            -t) # Gets top headlines of specified news source.
+                news_id="$2"
+                news_name=$(news_desc "$news_id" | grep Name | cut -d ':' -f 2 )
+                if [ -z "$news_name" ]
+                then
+                    echo -e "\nNews ID: ${IRed}${news_id}${Color_Off} does not exist."
+                fi
+
+                op_id=6
+                shift
+                ;;
+           -h) # Display usage.
+                usage
+                return 2;
+                ;;
+             --)
+                shift; break;;
+        esac
+    done
+
+
+    if [ $op_id -eq 1  ]
+    then
+        echo -e "Name    ID"
+        echo $news_sources | jq '.sources[] | .name, .id' | sed 's/"//g' | awk 'NR%2{printf "%s ",$0;next;}1'
+    elif [ $op_id -eq 2  ]
+        then
+            news_desc $news_id
+    elif [ $op_id -eq 3 ]
+    then
+        echo -e "Name    ID"
+        echo $news_sources | jq '.sources[] | select(.language=="en") | .name, .id' | sed 's/"//g' \
+            | awk 'NR%2{printf "%s ",$0;next;}1' | column
+    elif [ $op_id -eq 4 ]
+    then
+        echo $news_sources | jq '.sources[] | select(.language=="en") | .id' | sed 's/"//g'
+    elif [ $op_id -eq 5  ]
+    then
+        echo -e "\n${ICyan}News from the ${IRed}${news_name}${Color_Off}:"
+        if [ $get_urls -eq 1  ]
+        then
+            news_get -s "$news_id" -u
+        else
+            news_get -s "$news_id"
+        fi
+    elif [ $op_id -eq 6 ]
+    then
+        echo -e "\n${ICyan}News from the ${IRed}${news_name}${Color_Off}:"
+        if [ $get_urls -eq 1 ]
+        then
+            news_get -t "$news_id" -u
+        else
+            news_get -t "$news_id"
+        fi
+    else
+        usage
+        return 2;
+    fi
+
+}
+
+# Select Random English News source and print Top Headlines.
+randomnews()
+{   
+    # USAGE
+    usage(){
+        echo -e "
+        \rUsage: getnews [options]
+        \rDescription:\tGather the top-headlines of a random news source.
+
+        \roptional arguments:
+        \r-h\tShow this help message and exit.
+        \r-u\tPrint URL of news articles from source.
+        "
+    }
+
+    args=`getopt :uh $*`
+    get_urls=0
+    # you should not use `getopt abo: "$@"` since that would parse
+    # the arguments differently from what the set command below does.
+
+
+    set -- $args
+    for i
+    do
+         case "$i" in
+            -h) # Displays all news sources id.
+                usage
+                return 2;
+                ;;
+             -u) # List headline URLs.
+                get_urls=1;
+                shift
+                ;;
+        esac
+    done
+
+
+    en_news_id=`getnews -i`
+    start_id=1
+    total_ids=`echo $en_news_id | wc -w`
+
+    # Get random number between 1 and total news sources.
+    random_news_id=`jot -r 1 $start_id $total_ids 2>/dev/null`
+    if [ -z "$random_news_id" ]
+    then
+        random_news_id=`shuf -i $start_id-$total_ids -n 1`
+    fi
+
+
+    news_id=`echo $en_news_id | cut -d " " -f "$random_news_id"`
+
+    news_name=$(getnews -d "$news_id" | grep Name | cut -d ":" -f 2 | cut -d " " -f 2)
+
+    #echo -e "\n${ICyan}News from the ${IRed}${news_name}${Color_Off}:"
+    if [ $get_urls -eq 1 ]
+    then
+        getnews -t "$news_id" -u
+    else
+        getnews -t "$news_id"
+    fi
+}
+
+# Start my day.
+startmyday()
+{
+    brewit=0;
+    news_1="bbc-news"
+    news_2="hacker-news"
+    nameuser="YOUR_NAME_HERE"
+
+    # USAGE
+    usage(){
+        echo -e "
+        \rUsage: $0 [options]
+        \rDescription:\tThe script will gather the news.
+
+        \roptional arguments:
+        \r-b\tUpdate homebrew.
+        \r-h\tShow this help message and exit."
+    }
+
+    # Check for arguments
+    while getopts ":bh" options; do
+        case "${options}" in
+            b)
+                brewit=1;
+                ;;
+            h|*) # Display usage.
+                usage
+                return 1;
+                ;;
+        esac
+    done
+
+    echo -e "Good morning, ${IYellow}${nameuser}${Color_Off}."
+
+    if [ $brewit -eq 1 ]
+    then
+        echo -e "\n${ICyan}Updating Homebrew...${Color_Off}"
+        brew update && brew upgrade
+    fi
+
+    echo -e "\n${ICyan}The weather right now${Color_Off}:"
+    sweather
+
+    getnews -t "$news_1"
+
+    randomnews
+
+    getnews -t "$news_2"
+}
+# Open all likely work applications.
+startwork()
+(
+    open -a Skype\ for\ Business
+    open -a Microsoft\ Outlook
+    open -a Firefox
+    open -a Evernote
+    open -a flowdock
+
+)
+
+spotify()
+{
+    mopidy &
+    echo -e "${IBlue}Starting Spotify...${Color_Off}"
+    sleep 10
+    ncmpcpp
+} 
+
+# Setting remind function. 
+# Lets you set reminders to display whenever you open a new terminal. 
+# Everything in ~/.reminder will be displayed. Everything in ~/.reminder-oneshot will 
+# be displayed and then the file will be erased. 
+# Use remind whatever to add a new line to ~/.reminder, or remind with no arguments to 
+# run it interactively and add multiple lines. Use unremind to remove the last line from 
+# ~/.reminder (this requires moreutils to be installed).
+rem_file=$HOME/.reminder
+if [ -s $rem_file ]; then
+    echo -e "${BBlue}Today's${Color_Off} reminders are:"
+    cat $rem_file
+fi
+
+if [ -f ${rem-file}-oneshot ]; then
+    cat ${rem_file}-oneshot
+    rm ${rem_file}-oneshot
+fi
+
+remind()
+{
+    if [ "$1" ]; then
+        echo "$@" >> ~/.reminder
+    else
+        cat >> ~/.reminder
+    fi
+}
+
+unremind()
+{
+    if [ -s ${rem_file} ]
+    then
+        cp ${rem_file} ${rem_file}.swp
+        sed '$ d' ${rem_file}.swp > ${rem_file}
+        rm -f ${rem_file}.swp
+    else
+        echo -e "${Yellow}You have no reminders set.${Color_Off}"
+    fi
+}
+
+# Search through https://www.commandlinefu.com
+cmdfu()
+{
+    curl "http://www.commandlinefu.com/commands/matching/$(echo "$@" \
+    | sed 's/ /-/g')/$(echo -n $@ | base64)/plaintext"
+}
+
+# Get internal an external IP. 
+# uses ip or ifconfig, good on older or newer system
+m-ip()
+{
+        echo "--------------- Network Information ---------------"
+#    # newer system like arch
+#    ip addr | awk '/global/ {print $1,$2}' | cut -d\/ -f1
+#    ip addr | awk '/global/ {print $3,$4}'
+#    ip addr | awk '/ether/ {print $1,$2}'
+#    ip addr | awk '/scope link/ {print $1,$2}' | cut -d\/ -f1
+    # mac osx
+        ifconfig en0 | awk '/inet / {print $1,$2}' | awk -F: '{print $1,$2}'
+        ifconfig en0 | awk '/inet addr/ {print $5,$6}' | awk -F: '{print $1,$2}'
+        ifconfig en0 | awk '/ether/ {print "MAC address",$2}'
+        echo Current IP $(curl -s http://checkip.dyndns.org/ | grep -o "[[:digit:].]\+")
+        echo "---------------------------------------------------"
+}
+
+# Alarm function. WIP 
+alarm() 
+{
+    (($# < 2)) && {
+        echo "usage: alarm <seconds> <msg>"
+        return 1
+        }
+    local wait=$1 ; shift                                                                                                              
+    (sleep $wait 2>/dev/null && echo -e "\n!!\n$*\n!!\n" &)                   
+}
