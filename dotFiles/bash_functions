@@ -332,7 +332,7 @@ startmyday()
 
     getnews -t "$news_1"
 
-    randomnews
+   getnews -r
 
     getnews -t "$news_2"
 }
