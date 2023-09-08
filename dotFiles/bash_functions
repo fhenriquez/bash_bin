@@ -58,7 +58,7 @@ fi
 # Does not work on mobaXTerm commented out
 # Get IP address on ethernet.
 # uses ip or ifconfig, good on older or newer system
-my_ip()
+my-ip()
 {
     if [ "$OS" == "Mac OS X" ]; then
         MY_IP=$(/sbin/ifconfig en0 | grep -w "inet" | cut -d ' ' -f 2)
@@ -77,14 +77,14 @@ ii()
     echo -e "\n${BRed}Current date :$Color_Off " ; date
     echo -e "\n${BRed}Machine stats :$Color_Off " ; uptime
     echo -e "\n${BRed}Memory stats :$Color_Off " ;
-        if [ "$OS" == "Mac OS X" ]
+        if [[ "$OS" == "Mac OS X" ]]
         then
             top -l 1 -s 0 | grep PhysMem
         else
             free -m
         fi
     echo -e "\n${BRed}Diskspace :$Color_Off " ; df / $HOME
-    echo -e "\n${BRed}Local IP Address :$Color_Off" ; my_ip
+    echo -e "\n${BRed}Local IP Address :$Color_Off" ; my-ip
     echo -e "\n${BRed}Open connections :$Color_Off "; netstat -int;
     echo
 }
